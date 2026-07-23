@@ -107,11 +107,17 @@ curl -X POST http://localhost:3000/api/v1/spaces \
 
 ```bash
 npm test
+npm run test:integration
 npm run lint
 npm run build
 docker compose config --quiet
 npm audit --omit=dev
 ```
+
+Integration tests create and destroy only a database whose name ends in `_test`.
+They cover registration, login, authorization, vehicle creation, administrator
+space creation, reservation conflict detection, listing, and cancellation. The
+same checks run automatically in GitHub Actions for pushes and pull requests.
 
 ## Security notes
 

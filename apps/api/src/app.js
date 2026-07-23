@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import helmet from "helmet";
+import pino from "pino";
 import pinoHttp from "pino-http";
 import { config } from "./config.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -14,7 +15,12 @@ import { vehicleRouter } from "./modules/vehicles/vehicle.routes.js";
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(pinoHttp());
+app.use(pinoHttp({
+  logger: pino({
+    level: config.NODE_ENV === "test" ? "silent" : "info",
+    redact: ["req.headers.authorization"]
+  })
+}));
 app.use(helmet());
 app.use(cors({ origin: config.WEB_ORIGIN }));
 app.use(express.json({ limit: "32kb" }));
