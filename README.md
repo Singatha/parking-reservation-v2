@@ -67,11 +67,15 @@ Update `.env`, create the configured database and user, then run:
 
 ```bash
 npm run db:migrate
+npm run db:seed
 npm run dev
 ```
 
 The frontend reads `VITE_API_URL` at build time and defaults to
 `http://localhost:3000/api/v1`.
+
+The seed command is safe to run repeatedly. It creates or refreshes five sample
+parking spaces identified by their unique space codes.
 
 ## Create the first administrator
 

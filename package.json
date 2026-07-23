@@ -11,7 +11,8 @@
     "build": "npm run build -w @parking/web",
     "lint": "npm run lint -w @parking/api && npm run lint -w @parking/web",
     "test": "npm run test -w @parking/api",
-    "db:migrate": "npm run db:migrate -w @parking/api"
+    "db:migrate": "npm run db:migrate -w @parking/api",
+    "db:seed": "npm run db:seed -w @parking/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.0"
