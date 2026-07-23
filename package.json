@@ -1,0 +1,22 @@
+{
+  "name": "parking-reservation-v2",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @parking/api\" \"npm run dev -w @parking/web\"",
+    "build": "npm run build -w @parking/web",
+    "lint": "npm run lint -w @parking/api && npm run lint -w @parking/web",
+    "test": "npm run test -w @parking/api",
+    "db:migrate": "npm run db:migrate -w @parking/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,55 @@
+services:
+  database:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: parking_reservation
+      MYSQL_USER: parking_app
+      MYSQL_PASSWORD: local-parking-password
+      MYSQL_ROOT_PASSWORD: local-root-password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-plocal-root-password"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      WEB_ORIGIN: http://localhost:5173
+      DATABASE_HOST: database
+      DATABASE_PORT: 3306
+      DATABASE_NAME: parking_reservation
+      DATABASE_USER: parking_app
+      DATABASE_PASSWORD: local-parking-password
+      JWT_SECRET: local-development-secret-change-before-production
+      JWT_EXPIRES_IN: 1h
+    ports:
+      - "3000:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000/api/v1
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  mysql-data:
