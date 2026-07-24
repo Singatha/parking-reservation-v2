@@ -119,6 +119,7 @@ curl -b cookies.txt -X POST http://localhost:3000/api/v1/spaces \
 ```bash
 npm test
 npm run test:integration
+npm run test:e2e
 npm run lint
 npm run build
 docker compose config --quiet
@@ -131,6 +132,11 @@ authorization, vehicle creation, administrator space creation, reservation confl
 detection, editing, activation, deactivation, safe removal, listing, cancellation,
 logout, and server-side session revocation. The same checks run automatically in
 GitHub Actions for pushes and pull requests.
+
+Playwright browser tests exercise the real React interface in Chromium. They cover
+customer registration, refresh-safe sessions, vehicle creation, reservation and
+cancellation, logout, administrator promotion, and the parking-space management
+interface. Test records use unique identifiers and are removed after the suite.
 
 ## Security notes
 

@@ -49,6 +49,26 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare browser-test database
+        env:
+          NODE_ENV: test
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: 3306
+          DATABASE_NAME: parking_reservation
+          DATABASE_USER: parking_app
+          DATABASE_PASSWORD: local-parking-password
+          SESSION_TTL_DAYS: 1
+          COOKIE_SECURE: "false"
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Run browser tests
+        run: npm run test:e2e
+
       - name: Build frontend
         run: npm run build
 

@@ -111,10 +111,11 @@ function Dashboard({ user, onLogout }) {
 
   async function addVehicle(event) {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
     try {
       await api("/vehicles", { method: "POST", body: JSON.stringify(values) });
-      event.currentTarget.reset();
+      form.reset();
       setMessage("Vehicle added.");
       load();
     } catch (requestError) { setError(requestError.message); }
