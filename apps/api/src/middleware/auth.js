@@ -1,19 +1,44 @@
-import jwt from "jsonwebtoken";
-import { config } from "../config.js";
+import { pool } from "../database/pool.js";
+import { parseCookies, SESSION_COOKIE } from "../lib/cookies.js";
 import { AppError } from "../lib/errors.js";
+import { hashToken } from "../modules/auth/session.service.js";
 
-export function authenticate(req, _res, next) {
-  const [scheme, token] = (req.headers.authorization ?? "").split(" ");
-  if (scheme !== "Bearer" || !token) {
-    return next(new AppError(401, "UNAUTHENTICATED", "A valid bearer token is required"));
+export async function authenticate(req, _res, next) {
+  const token = parseCookies(req.headers.cookie)[SESSION_COOKIE];
+  if (!token) {
+    return next(new AppError(401, "UNAUTHENTICATED", "An authenticated session is required"));
   }
 
   try {
-    const payload = jwt.verify(token, config.JWT_SECRET, { algorithms: ["HS256"] });
-    req.user = { id: Number(payload.sub), role: payload.role };
+    const [rows] = await pool.execute(
+      `SELECT s.id AS session_id, s.csrf_token_hash, u.id, u.email, u.username,
+              u.first_name, u.last_name, u.role
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.expires_at > NOW()
+       LIMIT 1`,
+      [hashToken(token)]
+    );
+    const session = rows[0];
+    if (!session) {
+      return next(new AppError(401, "UNAUTHENTICATED", "The session is invalid or expired"));
+    }
+    req.session = {
+      id: session.session_id,
+      token,
+      csrfTokenHash: session.csrf_token_hash
+    };
+    req.user = {
+      id: session.id,
+      email: session.email,
+      username: session.username,
+      firstName: session.first_name,
+      lastName: session.last_name,
+      role: session.role
+    };
     next();
-  } catch {
-    next(new AppError(401, "UNAUTHENTICATED", "The access token is invalid or expired"));
+  } catch (error) {
+    next(error);
   }
 }
 

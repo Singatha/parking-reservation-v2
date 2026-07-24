@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
-const migrationPath = path.resolve(testDirectory, "../../src/database/migrations/001_initial.sql");
+const migrationsDirectory = path.resolve(testDirectory, "../../src/database/migrations");
 
 function connectionConfig(database) {
   return {
@@ -37,8 +37,13 @@ export async function setup() {
 
   const database = await mysql.createConnection(connectionConfig(databaseName));
   try {
-    const migration = await fs.readFile(migrationPath, "utf8");
-    await database.query(migration);
+    const migrations = (await fs.readdir(migrationsDirectory))
+      .filter((filename) => filename.endsWith(".sql"))
+      .sort();
+    for (const filename of migrations) {
+      const migration = await fs.readFile(path.join(migrationsDirectory, filename), "utf8");
+      await database.query(migration);
+    }
   } finally {
     await database.end();
   }

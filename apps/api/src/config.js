@@ -1,6 +1,11 @@
 import "dotenv/config";
 import { z } from "zod";
 
+const booleanFromString = z
+  .enum(["true", "false"])
+  .default("false")
+  .transform((value) => value === "true");
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_PORT: z.coerce.number().int().positive().default(3000),
@@ -10,8 +15,8 @@ const schema = z.object({
   DATABASE_NAME: z.string().min(1).default("parking_reservation"),
   DATABASE_USER: z.string().min(1).default("parking_app"),
   DATABASE_PASSWORD: z.string().min(1),
-  JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default("1h")
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  COOKIE_SECURE: booleanFromString
 });
 
 export const config = schema.parse(process.env);

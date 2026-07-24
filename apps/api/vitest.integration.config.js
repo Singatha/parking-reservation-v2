@@ -10,8 +10,8 @@ const integrationEnvironment = {
   DATABASE_USER: process.env.DATABASE_USER ?? "parking_app",
   DATABASE_PASSWORD: process.env.DATABASE_PASSWORD ?? "local-parking-password",
   DATABASE_ROOT_PASSWORD: process.env.DATABASE_ROOT_PASSWORD ?? "local-root-password",
-  JWT_SECRET: "integration-test-secret-at-least-32-characters-long",
-  JWT_EXPIRES_IN: "15m"
+  SESSION_TTL_DAYS: "1",
+  COOKIE_SECURE: "false"
 };
 
 Object.assign(process.env, integrationEnvironment);

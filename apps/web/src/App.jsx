@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, setAccessToken } from "./api.js";
+import { api } from "./api.js";
 
 const emptyRegistration = {
   email: "", username: "", password: "", firstName: "", lastName: ""
@@ -23,7 +23,6 @@ function Auth({ onLogin }) {
         method: "POST",
         body: JSON.stringify({ email: form.email, password: form.password })
       });
-      setAccessToken(session.token);
       onLogin(session.user);
     } catch (requestError) {
       setError(requestError.message);
@@ -128,8 +127,9 @@ function Dashboard({ user, onLogout }) {
   }
 
   function logout() {
-    setAccessToken(null);
-    onLogout();
+    api("/auth/logout", { method: "POST" })
+      .catch(() => {})
+      .finally(onLogout);
   }
 
   return (
@@ -209,5 +209,18 @@ function Dashboard({ user, onLogout }) {
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    api("/auth/session")
+      .then((session) => setUser(session.user))
+      .catch(() => setUser(null))
+      .finally(() => setCheckingSession(false));
+  }, []);
+
+  if (checkingSession) {
+    return <main className="session-loading"><div className="brand"><span className="brand-mark">P</span> Parkwise</div><p>Restoring your session…</p></main>;
+  }
+
   return user ? <Dashboard user={user} onLogout={() => setUser(null)} /> : <Auth onLogin={setUser} />;
 }

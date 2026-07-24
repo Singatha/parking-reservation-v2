@@ -1,6 +1,4 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { config } from "../../config.js";
 import { pool } from "../../database/pool.js";
 import { AppError } from "../../lib/errors.js";
 
@@ -33,14 +31,7 @@ export async function loginUser({ email, password }) {
     throw new AppError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
   }
 
-  const token = jwt.sign({ role: user.role }, config.JWT_SECRET, {
-    algorithm: "HS256",
-    subject: String(user.id),
-    expiresIn: config.JWT_EXPIRES_IN
-  });
-
   return {
-    token,
     user: {
       id: user.id,
       email: user.email,

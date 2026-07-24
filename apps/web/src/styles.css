@@ -19,6 +19,8 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 h1, h2, h3, p { margin-top: 0; }
+.session-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 18px; }
+.session-loading p { color: #6d756f; }
 
 .auth-layout { display: grid; grid-template-columns: 1.05fr .95fr; min-height: 100vh; }
 .hero-panel { background: var(--green); color: white; padding: 42px 7vw; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }

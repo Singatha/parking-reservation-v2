@@ -31,8 +31,8 @@ services:
       DATABASE_NAME: parking_reservation
       DATABASE_USER: parking_app
       DATABASE_PASSWORD: local-parking-password
-      JWT_SECRET: local-development-secret-change-before-production
-      JWT_EXPIRES_IN: 1h
+      SESSION_TTL_DAYS: 7
+      COOKIE_SECURE: "false"
     ports:
       - "3000:3000"
     depends_on:

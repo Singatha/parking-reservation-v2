@@ -8,7 +8,9 @@ while preserving clear module boundaries.
 
 - User registration and login
 - Password hashing with bcrypt
-- JWT-protected API routes
+- Opaque HTTP-only cookie sessions stored as hashes
+- CSRF protection for every authenticated state change
+- Session restoration after page refresh and server-side logout revocation
 - Rate limiting for authentication endpoints
 - User-owned vehicle management
 - Parking-space listing and administrator-only creation
@@ -86,14 +88,23 @@ account that will administer parking spaces, promote it directly in the database
 UPDATE users SET role = 'admin' WHERE email = 'admin@example.com';
 ```
 
-Sign in again after promotion so the new token includes the administrator role.
+Sign out and sign in again after promotion so the restored session includes the
+administrator role.
 
-Create a parking space using that token:
+For local API access, sign in and save the returned cookies:
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/spaces \
-  -H "Authorization: Bearer YOUR_TOKEN" \
+curl -c cookies.txt -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"YOUR_PASSWORD"}'
+```
+
+Read the `parking_csrf` value from `cookies.txt`, then create a parking space:
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/api/v1/spaces \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: YOUR_CSRF_VALUE" \
   -d '{
     "code": "A-01",
     "type": "standard",
@@ -115,14 +126,16 @@ npm audit --omit=dev
 ```
 
 Integration tests create and destroy only a database whose name ends in `_test`.
-They cover registration, login, authorization, vehicle creation, administrator
-space creation, reservation conflict detection, listing, and cancellation. The
+They cover registration, cookie-based login, session restoration, CSRF enforcement,
+authorization, vehicle creation, administrator space creation, reservation conflict
+detection, listing, cancellation, logout, and server-side session revocation. The
 same checks run automatically in GitHub Actions for pushes and pull requests.
 
 ## Security notes
 
-- Use a randomly generated `JWT_SECRET` of at least 32 characters outside local
-  Docker development.
+- Set `COOKIE_SECURE=true` whenever the application is served over HTTPS.
+- Session and CSRF tokens are generated cryptographically; only their SHA-256 hashes
+  are stored in MySQL.
 - Do not commit `.env` files or production credentials.
 - Terminate TLS at the ingress or reverse proxy in production.
 - Rotate any credential that was previously committed in another repository; a new
