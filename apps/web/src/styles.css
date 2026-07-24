@@ -91,12 +91,28 @@ header nav button.active { color: var(--green); border-color: var(--green); }
 .status.cancelled { background: #eee9e6; color: #766a64; }
 .danger-link { border: 0; background: none; color: #b14c31; padding: 0; font-size: 12px; }
 .empty { grid-column: 1 / -1; padding: 50px; text-align: center; color: #777f78; border: 1px dashed #c9c5ba; border-radius: 10px; }
+.admin-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 30px; align-items: start; }
+.admin-table { display: grid; gap: 10px; }
+.admin-space-row { display: grid; grid-template-columns: 100px minmax(180px, 1fr) 100px 80px 220px; gap: 16px; align-items: center; padding: 18px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; }
+.admin-space-row.inactive { opacity: .65; }
+.admin-space-row > div:first-child { display: flex; gap: 7px; align-items: center; }
+.admin-space-row h3 { margin: 0 0 4px; font-size: 15px; }
+.admin-space-row p { margin: 0; color: #737b74; font-size: 12px; }
+.admin-price { font-weight: 700; }
+.admin-price small { display: block; color: #7a817b; font-weight: 400; }
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.row-actions button { border: 1px solid var(--line); background: white; border-radius: 6px; padding: 7px 9px; font-size: 11px; }
+.row-actions button.danger-link { border-color: #ebc9bf; color: #a84125; }
 
 @media (max-width: 900px) {
   .auth-layout { grid-template-columns: 1fr; }
   .hero-panel { min-height: 430px; padding: 35px; }
   .hero-copy h1 { font-size: 60px; letter-spacing: -3px; }
   .content-grid { grid-template-columns: 1fr; }
+  .admin-layout { grid-template-columns: 1fr; }
+  .admin-space-row { grid-template-columns: 80px 1fr 90px; }
+  .admin-space-row > .status { display: none; }
+  .row-actions { grid-column: 2 / -1; justify-content: flex-start; }
   .booking-card { position: static; }
   header { flex-wrap: wrap; padding-top: 15px; }
   header nav { order: 3; width: 100%; height: 50px; justify-content: space-around; }

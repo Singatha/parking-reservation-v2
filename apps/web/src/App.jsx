@@ -5,6 +5,14 @@ const emptyRegistration = {
   email: "", username: "", password: "", firstName: "", lastName: ""
 };
 
+const emptySpace = {
+  code: "",
+  type: "standard",
+  buildingName: "",
+  address: "",
+  hourlyPrice: ""
+};
+
 function Auth({ onLogin }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState(emptyRegistration);
@@ -76,6 +84,7 @@ function Auth({ onLogin }) {
 function Dashboard({ user, onLogout }) {
   const [tab, setTab] = useState("spaces");
   const [spaces, setSpaces] = useState([]);
+  const [adminSpaces, setAdminSpaces] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [reservations, setReservations] = useState([]);
   const [message, setMessage] = useState("");
@@ -83,16 +92,20 @@ function Dashboard({ user, onLogout }) {
 
   const load = useCallback(async () => {
     try {
-      const [spacesData, vehiclesData, reservationsData] = await Promise.all([
-        api("/spaces"), api("/vehicles"), api("/reservations")
+      const [spacesData, vehiclesData, reservationsData, adminSpacesData] = await Promise.all([
+        api("/spaces"),
+        api("/vehicles"),
+        api("/reservations"),
+        user.role === "admin" ? api("/spaces?includeInactive=true") : Promise.resolve([])
       ]);
       setSpaces(spacesData);
       setVehicles(vehiclesData);
       setReservations(reservationsData);
+      setAdminSpaces(adminSpacesData);
     } catch (requestError) {
       setError(requestError.message);
     }
-  }, []);
+  }, [user.role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -126,6 +139,57 @@ function Dashboard({ user, onLogout }) {
     } catch (requestError) { setError(requestError.message); }
   }
 
+  async function saveSpace(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const id = values.id;
+    delete values.id;
+    try {
+      await api(id ? `/spaces/${id}` : "/spaces", {
+        method: id ? "PUT" : "POST",
+        body: JSON.stringify(values)
+      });
+      form.reset();
+      form.elements.type.value = "standard";
+      form.elements.id.value = "";
+      setMessage(id ? "Parking space updated." : "Parking space created.");
+      load();
+    } catch (requestError) { setError(requestError.message); }
+  }
+
+  function editSpace(space) {
+    setTab("manage");
+    const form = document.getElementById("space-form");
+    form.elements.id.value = space.id;
+    form.elements.code.value = space.code;
+    form.elements.type.value = space.type;
+    form.elements.buildingName.value = space.buildingName;
+    form.elements.address.value = space.address;
+    form.elements.hourlyPrice.value = space.hourlyPrice;
+    form.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  async function setSpaceStatus(space) {
+    try {
+      await api(`/spaces/${space.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ active: !Boolean(space.active) })
+      });
+      setMessage(`Parking space ${space.active ? "deactivated" : "activated"}.`);
+      load();
+    } catch (requestError) { setError(requestError.message); }
+  }
+
+  async function removeSpace(space) {
+    if (!window.confirm(`Remove parking space ${space.code}?`)) return;
+    try {
+      await api(`/spaces/${space.id}`, { method: "DELETE" });
+      setMessage("Parking space removed.");
+      load();
+    } catch (requestError) { setError(requestError.message); }
+  }
+
   function logout() {
     api("/auth/logout", { method: "POST" })
       .catch(() => {})
@@ -137,7 +201,7 @@ function Dashboard({ user, onLogout }) {
       <header>
         <div className="brand"><span className="brand-mark">P</span> Parkwise</div>
         <nav>
-          {["spaces", "vehicles", "reservations"].map((item) => (
+          {["spaces", "vehicles", "reservations", ...(user.role === "admin" ? ["manage"] : [])].map((item) => (
             <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>
           ))}
         </nav>
@@ -145,8 +209,8 @@ function Dashboard({ user, onLogout }) {
       </header>
       <main className="dashboard">
         <div className="page-heading">
-          <div><p className="eyebrow">GOOD TO SEE YOU</p><h1>{tab === "spaces" ? "Find your space" : tab === "vehicles" ? "Your vehicles" : "Your reservations"}</h1></div>
-          <p className="muted">{tab === "spaces" ? "Choose a parking bay and the time you need it." : "Everything connected to your account."}</p>
+          <div><p className="eyebrow">GOOD TO SEE YOU</p><h1>{tab === "spaces" ? "Find your space" : tab === "vehicles" ? "Your vehicles" : tab === "reservations" ? "Your reservations" : "Manage spaces"}</h1></div>
+          <p className="muted">{tab === "spaces" ? "Choose a parking bay and the time you need it." : tab === "manage" ? "Create and maintain the spaces customers can reserve." : "Everything connected to your account."}</p>
         </div>
         {message && <p className="notice">{message}<button onClick={() => setMessage("")}>×</button></p>}
         {error && <p className="error">{error}<button onClick={() => setError("")}>×</button></p>}
@@ -201,6 +265,43 @@ function Dashboard({ user, onLogout }) {
             ))}
             {!reservations.length && <div className="empty">No reservations yet. Your first booking will appear here.</div>}
           </section>
+        )}
+
+        {tab === "manage" && user.role === "admin" && (
+          <div className="admin-layout">
+            <section className="admin-table">
+              <div className="section-title"><h2>All parking spaces</h2><span>{adminSpaces.length} total</span></div>
+              {adminSpaces.map((space) => (
+                <article className={`admin-space-row ${space.active ? "" : "inactive"}`} key={space.id}>
+                  <div><strong>{space.code}</strong><span className="tag">{space.type}</span></div>
+                  <div><h3>{space.buildingName}</h3><p>{space.address}</p></div>
+                  <div className="admin-price">R{Number(space.hourlyPrice).toFixed(2)}<small>/ hour</small></div>
+                  <span className={`status ${space.active ? "confirmed" : "cancelled"}`}>{space.active ? "active" : "inactive"}</span>
+                  <div className="row-actions">
+                    <button onClick={() => editSpace(space)}>Edit</button>
+                    <button onClick={() => setSpaceStatus(space)}>{space.active ? "Deactivate" : "Activate"}</button>
+                    <button className="danger-link" onClick={() => removeSpace(space)}>Remove</button>
+                  </div>
+                </article>
+              ))}
+              {!adminSpaces.length && <div className="empty">No parking spaces exist yet.</div>}
+            </section>
+            <aside className="booking-card">
+              <p className="eyebrow">SPACE DETAILS</p><h2>Add or edit a space</h2>
+              <form id="space-form" onSubmit={saveSpace}>
+                <input type="hidden" name="id" />
+                <div className="field-row">
+                  <label>Space code<input name="code" placeholder="A-01" required /></label>
+                  <label>Type<select name="type" defaultValue={emptySpace.type}><option value="standard">Standard</option><option value="accessible">Accessible</option><option value="motorcycle">Motorcycle</option><option value="ev">EV</option><option value="oversized">Oversized</option></select></label>
+                </div>
+                <label>Building name<input name="buildingName" placeholder="Central Parkade" required /></label>
+                <label>Address<input name="address" placeholder="1 Main Road" required /></label>
+                <label>Hourly price (R)<input name="hourlyPrice" type="number" min="0.01" step="0.01" required /></label>
+                <button className="primary">Save parking space</button>
+                <button className="text-button" type="reset">Clear form</button>
+              </form>
+            </aside>
+          </div>
         )}
       </main>
     </div>

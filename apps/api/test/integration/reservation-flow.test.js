@@ -139,6 +139,69 @@ describe("parking reservation workflow", () => {
     spaceId = response.body.data.id;
   });
 
+  it("allows an administrator to edit and deactivate a parking space", async () => {
+    const update = await adminAgent
+      .put(`/api/v1/spaces/${spaceId}`)
+      .set("X-CSRF-Token", adminCsrf)
+      .send({
+        code: "T-02",
+        type: "ev",
+        buildingName: "Updated Test Parkade",
+        address: "2 Test Street",
+        hourlyPrice: 30
+      });
+
+    expect(update.status).toBe(200);
+    expect(update.body.data).toMatchObject({
+      code: "T-02",
+      type: "ev",
+      hourlyPrice: 30
+    });
+
+    const deactivate = await adminAgent
+      .patch(`/api/v1/spaces/${spaceId}/status`)
+      .set("X-CSRF-Token", adminCsrf)
+      .send({ active: false });
+    expect(deactivate.status).toBe(200);
+    expect(deactivate.body.data.active).toBe(false);
+
+    const customerList = await customerAgent.get("/api/v1/spaces");
+    expect(customerList.body.data).toHaveLength(0);
+
+    const adminList = await adminAgent.get("/api/v1/spaces?includeInactive=true");
+    expect(adminList.body.data).toEqual([
+      expect.objectContaining({
+        id: spaceId,
+        code: "T-02",
+        active: 0
+      })
+    ]);
+
+    const activate = await adminAgent
+      .patch(`/api/v1/spaces/${spaceId}/status`)
+      .set("X-CSRF-Token", adminCsrf)
+      .send({ active: true });
+    expect(activate.status).toBe(200);
+  });
+
+  it("allows removal of a parking space without reservation history", async () => {
+    const created = await adminAgent
+      .post("/api/v1/spaces")
+      .set("X-CSRF-Token", adminCsrf)
+      .send({
+        code: "DELETE-ME",
+        type: "standard",
+        buildingName: "Temporary Parkade",
+        address: "3 Test Street",
+        hourlyPrice: 10
+      });
+
+    const removed = await adminAgent
+      .delete(`/api/v1/spaces/${created.body.data.id}`)
+      .set("X-CSRF-Token", adminCsrf);
+    expect(removed.status).toBe(204);
+  });
+
   it("creates and lists a reservation", async () => {
     const response = await customerAgent
       .post("/api/v1/reservations")
@@ -153,7 +216,7 @@ describe("parking reservation workflow", () => {
     expect(response.status).toBe(201);
     expect(response.body.data).toMatchObject({
       status: "confirmed",
-      totalPrice: 50
+      totalPrice: 60
     });
     reservationId = response.body.data.id;
 
@@ -163,7 +226,7 @@ describe("parking reservation workflow", () => {
     expect(list.body.data).toHaveLength(1);
     expect(list.body.data[0]).toMatchObject({
       id: reservationId,
-      spaceCode: "T-01",
+      spaceCode: "T-02",
       licensePlate: "CA 123-456",
       status: "confirmed"
     });
@@ -194,6 +257,15 @@ describe("parking reservation workflow", () => {
       id: reservationId,
       status: "cancelled"
     });
+  });
+
+  it("protects parking spaces with reservation history from removal", async () => {
+    const response = await adminAgent
+      .delete(`/api/v1/spaces/${spaceId}`)
+      .set("X-CSRF-Token", adminCsrf);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("SPACE_HAS_RESERVATIONS");
   });
 
   it("rejects state changes without a CSRF token", async () => {

@@ -13,7 +13,7 @@ while preserving clear module boundaries.
 - Session restoration after page refresh and server-side logout revocation
 - Rate limiting for authentication endpoints
 - User-owned vehicle management
-- Parking-space listing and administrator-only creation
+- Parking-space listing and complete administrator management
 - Transactional reservations with overlap protection
 - Reservation history and cancellation
 - MySQL migrations, health checks, structured logs, and graceful shutdown
@@ -128,8 +128,9 @@ npm audit --omit=dev
 Integration tests create and destroy only a database whose name ends in `_test`.
 They cover registration, cookie-based login, session restoration, CSRF enforcement,
 authorization, vehicle creation, administrator space creation, reservation conflict
-detection, listing, cancellation, logout, and server-side session revocation. The
-same checks run automatically in GitHub Actions for pushes and pull requests.
+detection, editing, activation, deactivation, safe removal, listing, cancellation,
+logout, and server-side session revocation. The same checks run automatically in
+GitHub Actions for pushes and pull requests.
 
 ## Security notes
 
