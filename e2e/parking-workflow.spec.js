@@ -98,50 +98,63 @@ test.describe.serial("browser parking workflow", () => {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Find your space" })).toBeVisible();
 
-    await page.getByLabel("Theme").selectOption("dark");
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Theme" }).hover();
+    await page.getByRole("menuitemradio", { name: "Dark" }).press("Enter");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-    await page.getByRole("button", { name: "profile" }).click();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Profile" }).click();
     await page.getByLabel("First name").fill("Browser");
     await page.getByRole("button", { name: "Save profile" }).click();
     await expect(page.getByText("Profile updated.")).toBeVisible();
 
-    await page.getByRole("button", { name: "vehicles" }).click();
+    await page.getByRole("link", { name: "Vehicles" }).click();
+    await page.getByRole("link", { name: "Add vehicle" }).first().click();
     await page.getByLabel("Vehicle name").fill("Browser test car");
     await page.getByLabel("License plate").fill(licensePlate);
-    await page.getByRole("button", { name: "Add vehicle" }).click();
+    await page.getByRole("button", { name: "Save vehicle" }).click();
     await expect(page.getByText(licensePlate)).toBeVisible();
 
-    await page.getByRole("button", { name: "spaces" }).click();
+    await page.getByRole("link", { name: "Parking" }).click();
+    await page.getByRole("link", { name: "New reservation" }).click();
     const spaceOption = page.getByLabel("Parking space").locator("option", { hasText: bookingSpaceCode });
     await page.getByLabel("Parking space").selectOption(await spaceOption.getAttribute("value"));
     await page.getByLabel("Vehicle").selectOption({ label: `Browser test car · ${licensePlate}` });
     await page.getByLabel("From").fill("2042-05-10T08:00");
     await page.getByLabel("Until").fill("2042-05-10T10:00");
-    await page.getByRole("button", { name: "Reserve space" }).click();
+    await page.getByRole("button", { name: "Continue to payment" }).click();
 
-    await expect(page.getByRole("heading", { name: "Your reservations" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reservations" })).toBeVisible();
     await expect(page.getByText(bookingSpaceCode)).toBeVisible();
     await page.getByRole("button", { name: "Pay now" }).click();
-    await expect(page.getByRole("heading", { name: "Your invoices" })).toBeVisible();
-    await page.locator(".invoice-list button").first().click();
-    await expect(page.getByRole("button", { name: "Print / save PDF" })).toBeVisible();
-    await expect(page.getByText("Total paid")).toBeVisible();
+    await page.getByRole("link", { name: "Invoices" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Invoices", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "View" }).first().click();
+    await expect(page.getByRole("button", { name: "Download PDF" })).toBeVisible();
+    await expect(page.locator("dt", { hasText: "Total paid" })).toBeVisible();
+    const pdfDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download PDF" }).click();
+    await expect((await pdfDownload).suggestedFilename()).toMatch(/^INV-.+\.pdf$/);
 
-    await page.getByRole("button", { name: "reservations" }).click();
+    await page.getByRole("link", { name: "Reservations" }).click();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByText("Reservation cancelled.")).toBeVisible();
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page.getByRole("heading", { name: "Sign in to Parkwise" })).toBeVisible();
   });
 
   test("administrator manages spaces and customers cannot see admin controls", async ({ page }) => {
     await page.goto("/");
     await register(page, admin);
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
 
     const database = await mysql.createConnection(databaseConfig());
     try {
@@ -151,9 +164,11 @@ test.describe.serial("browser parking workflow", () => {
     }
 
     await login(page, admin);
-    await page.getByRole("button", { name: "manage" }).click();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Manage spaces" }).click();
     await expect(page.getByRole("heading", { name: "Manage spaces" })).toBeVisible();
 
+    await page.getByRole("link", { name: "Add space" }).click();
     await page.getByLabel("Space code").fill(managedSpaceCode);
     await page.getByLabel("Type").selectOption("ev");
     await page.getByLabel("Building name").fill("Admin Test Parkade");
@@ -162,19 +177,23 @@ test.describe.serial("browser parking workflow", () => {
     await page.getByRole("button", { name: "Save parking space" }).click();
     await expect(page.getByText(managedSpaceCode)).toBeVisible();
 
-    let row = page.locator(".admin-space-row", { hasText: managedSpaceCode });
-    await row.getByRole("button", { name: "Edit" }).click();
+    let row = page.locator("article", { hasText: managedSpaceCode });
+    await row.getByRole("button", { name: `Actions for ${managedSpaceCode}` }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
     await page.getByLabel("Space code").fill(editedSpaceCode);
     await page.getByLabel("Hourly price (R)").fill("40");
     await page.getByRole("button", { name: "Save parking space" }).click();
     await expect(page.getByText(editedSpaceCode)).toBeVisible();
 
-    row = page.locator(".admin-space-row", { hasText: editedSpaceCode });
-    await row.getByRole("button", { name: "Deactivate" }).click();
-    await expect(row.getByText("inactive")).toBeVisible();
+    row = page.locator("article", { hasText: editedSpaceCode });
+    await row.getByRole("button", { name: `Actions for ${editedSpaceCode}` }).click();
+    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    await expect(row.getByText("Inactive")).toBeVisible();
 
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
     await login(page, customer);
-    await expect(page.getByRole("button", { name: "manage" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await expect(page.getByRole("menuitem", { name: "Manage spaces" })).toHaveCount(0);
   });
 });

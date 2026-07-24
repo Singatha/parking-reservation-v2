@@ -43,6 +43,15 @@ Express API
       MySQL
 ```
 
+## Frontend design system
+
+The interface uses Tailwind CSS for design tokens and responsive layouts,
+shadcn-style reusable components, Radix UI for accessible menus, Lucide icons,
+React Router for page-level workflows, and TanStack Table for invoice data. Forms
+for vehicles, reservations, and parking spaces live on dedicated routes, while
+profile, theme, administrator controls, and sign out are grouped in the navigation
+profile menu.
+
 ## Run with Docker
 
 ```bash
