@@ -1,31 +1,78 @@
 # Parkwise
 
-A secure parking-reservation application implemented as a modular monolith. It keeps
-authentication, vehicles, parking spaces, and reservations in one deployable API
-while preserving clear module boundaries.
-
-## What is included
-
-- User registration and login
-- Editable user profiles and secure password changes
-- Password hashing with bcrypt
-- Opaque HTTP-only cookie sessions stored as hashes
-- CSRF protection for every authenticated state change
-- Session restoration after page refresh and server-side logout revocation
-- Rate limiting for authentication endpoints
-- User-owned vehicle management
-- Parking-space listing and complete administrator management
 - Transactional reservations with overlap protection
-- Fifteen-minute payment holds and an idempotent mock payment gateway
-- Immutable invoices with printable, save-to-PDF views
-- Reservation history and cancellation
-- Persistent light, dark, and system themes
-- MySQL migrations, health checks, structured logs, and graceful shutdown
-- Responsive React interface
-- Docker images that run as non-root users
+Parkwise is a modern full-stack parking reservation platform. Customers can manage
+vehicles, reserve available spaces, complete mock payments, and download PDF
+invoices. Administrators can manage the parking inventory through protected
+role-based workflows.
+
+The application is implemented as a modular monolith: authentication, profiles,
+vehicles, spaces, reservations, billing, and invoices share one deployable API
+while retaining clear module boundaries.
+
+## Demo workflow
+
+1. Register a customer account.
+2. Add a vehicle from the Vehicles page.
+3. Choose an available parking space and reservation period.
+4. Approve the simulated payment.
+5. Open the generated invoice or download it as a PDF.
+
+The payment flow is intentionally simulated. It does not collect or transfer real
+money.
+
+## Features
+
+### Customers
+
+- Register, sign in, restore a session after refresh, and securely sign out
+- Edit profile details and change a password
+- Add and remove owned vehicles
+- Browse available parking spaces
+- Create reservations with overlap protection and 15-minute payment holds
+- Approve or decline simulated payments
+- Review reservation history and cancel eligible reservations
+- View, search, and download immutable PDF invoices
+- Choose a persistent light, dark, or system theme
+
+### Administrators
+
+- Create and edit parking spaces
+- Activate or deactivate spaces
+- Safely remove unused spaces
+- Access role-protected management routes and controls
+
+### Platform
+
+- Responsive, accessible React interface
+- MySQL migrations and repeatable development seed data
+- Health checks, structured logging, and graceful shutdown
+- Non-root production Docker images
+- Unit, integration, and Playwright browser tests
 
 No credentials are committed. The example environment file contains placeholders
 only.
+
+## Screenshots
+
+The interface includes dedicated parking, vehicle, reservation, invoice, profile,
+and administrator views in both light and dark themes. Repository screenshots can
+be added under `docs/screenshots/` when a stable public demo dataset is available,
+then embedded here without exposing local account information.
+
+## Technology stack
+
+| Area | Technology |
+| --- | --- |
+| Frontend | React 19, Vite, Tailwind CSS |
+| UI | Radix UI, Lucide, shadcn-style components |
+| Routing and data presentation | React Router, TanStack Table |
+| PDF generation | jsPDF |
+| Backend | Node.js, Express |
+| Database | MySQL 8 |
+| Authentication | Opaque HTTP-only cookie sessions and CSRF protection |
+| Testing | Vitest, Playwright |
+| Infrastructure | Docker, Nginx |
 
 ## Architecture
 
@@ -35,9 +82,11 @@ Browser (React/Vite)
         v
 Express API
   ├── auth
+  ├── profiles
   ├── vehicles
   ├── spaces
-  └── reservations
+  ├── reservations
+  └── billing and invoices
         |
         v
       MySQL
@@ -170,6 +219,10 @@ appropriate accounting guidance for the deployment jurisdiction.
 
 ## Security notes
 
+- Passwords are hashed with bcrypt.
+- Authentication endpoints are rate limited.
+- Every authenticated state change requires CSRF validation.
+- Transactional reservation checks prevent overlapping bookings.
 - Set `COOKIE_SECURE=true` whenever the application is served over HTTPS.
 - Session and CSRF tokens are generated cryptographically; only their SHA-256 hashes
   are stored in MySQL.
@@ -177,3 +230,37 @@ appropriate accounting guidance for the deployment jurisdiction.
 - Terminate TLS at the ingress or reverse proxy in production.
 - Rotate any credential that was previously committed in another repository; a new
   repository does not make an already exposed credential safe.
+
+## Current limitations
+
+- Payments are simulated and do not move real money.
+- PDF invoices are generated in the browser rather than archived by the API.
+- Email and push notifications are not enabled.
+- Tax defaults to zero and is not a substitute for jurisdiction-specific accounting
+  advice.
+- Production hosting, monitoring, backups, and disaster recovery are not configured
+  by this repository.
+
+## Roadmap
+
+Future work is intentionally parked while the current product is stabilized.
+Possible next steps include a verified Stripe payment adapter, email notifications,
+server-generated invoice archives, production observability, database backups, and
+deployment automation.
+
+## Contributing
+
+1. Create a branch from the default branch.
+2. Keep changes focused and include tests for new behavior.
+3. Run the quality checks documented above.
+4. Open a pull request describing the change, validation performed, and any database
+   or environment updates.
+
+Please do not commit `.env` files, credentials, generated test artifacts, or customer
+data.
+
+## License
+
+No open-source license has been selected yet. Until a license file is added, the
+repository remains protected by default copyright rules and should not be treated
+as granting permission to copy, modify, or redistribute the code.
