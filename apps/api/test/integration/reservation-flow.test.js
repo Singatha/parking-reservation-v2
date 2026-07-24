@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
 import { app } from "../../src/app.js";
@@ -44,6 +45,8 @@ describe("parking reservation workflow", () => {
   let vehicleId;
   let spaceId;
   let reservationId;
+  let invoiceId;
+  const paymentKey = randomUUID();
 
   afterAll(async () => {
     await pool.end();
@@ -98,6 +101,27 @@ describe("parking reservation workflow", () => {
       licensePlate: "CA 123-456"
     });
     vehicleId = response.body.data.id;
+  });
+
+  it("views and updates the customer profile", async () => {
+    const profile = await customerAgent.get("/api/v1/profile");
+    expect(profile.status).toBe(200);
+    expect(profile.body.data.user.email).toBe(customer.email);
+
+    const update = await customerAgent
+      .put("/api/v1/profile")
+      .set("X-CSRF-Token", customerCsrf)
+      .send({
+        username: "updated-driver",
+        firstName: "Updated",
+        lastName: "Driver"
+      });
+    expect(update.status).toBe(200);
+    expect(update.body.data.user).toMatchObject({
+      username: "updated-driver",
+      firstName: "Updated",
+      email: customer.email
+    });
   });
 
   it("prevents a customer from creating parking spaces", async () => {
@@ -215,7 +239,7 @@ describe("parking reservation workflow", () => {
 
     expect(response.status).toBe(201);
     expect(response.body.data).toMatchObject({
-      status: "confirmed",
+      status: "pending_payment",
       totalPrice: 60
     });
     reservationId = response.body.data.id;
@@ -228,7 +252,7 @@ describe("parking reservation workflow", () => {
       id: reservationId,
       spaceCode: "T-02",
       licensePlate: "CA 123-456",
-      status: "confirmed"
+      status: "pending_payment"
     });
   });
 
@@ -245,6 +269,77 @@ describe("parking reservation workflow", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error.code).toBe("SPACE_UNAVAILABLE");
+  });
+
+  it("approves an idempotent mock payment and generates an invoice", async () => {
+    const body = {
+      reservationId,
+      outcome: "approved",
+      idempotencyKey: paymentKey
+    };
+    const payment = await customerAgent
+      .post("/api/v1/payments/mock")
+      .set("X-CSRF-Token", customerCsrf)
+      .send(body);
+
+    expect(payment.status).toBe(201);
+    expect(payment.body.data).toMatchObject({
+      reservationId,
+      status: "succeeded",
+      amount: 60,
+      currency: "ZAR"
+    });
+    invoiceId = payment.body.data.invoiceId;
+
+    const repeated = await customerAgent
+      .post("/api/v1/payments/mock")
+      .set("X-CSRF-Token", customerCsrf)
+      .send(body);
+    expect(repeated.status).toBe(201);
+    expect(repeated.body.data.id).toBe(payment.body.data.id);
+    expect(repeated.body.data.invoiceId).toBe(invoiceId);
+
+    const invoice = await customerAgent.get(`/api/v1/invoices/${invoiceId}`);
+    expect(invoice.status).toBe(200);
+    expect(invoice.body.data).toMatchObject({
+      invoiceNumber: expect.stringMatching(/^INV-\d{4}-\d{6}$/),
+      reservationId,
+      customerName: "Updated Driver",
+      spaceCode: "T-02",
+      subtotal: 60,
+      total: 60,
+      currency: "ZAR"
+    });
+
+    const invoices = await customerAgent.get("/api/v1/invoices");
+    expect(invoices.body.data).toHaveLength(1);
+  });
+
+  it("records a declined mock payment and releases the space", async () => {
+    const reservation = await customerAgent
+      .post("/api/v1/reservations")
+      .set("X-CSRF-Token", customerCsrf)
+      .send({
+        parkingSpaceId: spaceId,
+        vehicleId,
+        startsAt: "2030-05-11T08:00:00.000Z",
+        endsAt: "2030-05-11T10:00:00.000Z"
+      });
+
+    const payment = await customerAgent
+      .post("/api/v1/payments/mock")
+      .set("X-CSRF-Token", customerCsrf)
+      .send({
+        reservationId: reservation.body.data.id,
+        outcome: "declined",
+        idempotencyKey: randomUUID()
+      });
+    expect(payment.status).toBe(200);
+    expect(payment.body.data).toMatchObject({
+      status: "failed",
+      failureReason: "Mock payment was declined",
+      invoiceId: null
+    });
   });
 
   it("cancels the reservation", async () => {
@@ -277,6 +372,27 @@ describe("parking reservation workflow", () => {
     expect(response.body.error.code).toBe("INVALID_CSRF_TOKEN");
   });
 
+  it("changes the password after validating the current password", async () => {
+    const invalid = await customerAgent
+      .post("/api/v1/profile/password")
+      .set("X-CSRF-Token", customerCsrf)
+      .send({
+        currentPassword: "wrong-password",
+        newPassword: "new-secure-password"
+      });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe("INVALID_CURRENT_PASSWORD");
+
+    const changed = await customerAgent
+      .post("/api/v1/profile/password")
+      .set("X-CSRF-Token", customerCsrf)
+      .send({
+        currentPassword: customer.password,
+        newPassword: "new-secure-password"
+      });
+    expect(changed.status).toBe(204);
+  });
+
   it("revokes the server-side session on logout", async () => {
     const logout = await customerAgent
       .post("/api/v1/auth/logout")
@@ -285,5 +401,12 @@ describe("parking reservation workflow", () => {
     expect(logout.status).toBe(204);
     const restored = await customerAgent.get("/api/v1/auth/session");
     expect(restored.status).toBe(401);
+
+    expect((await login(customerAgent, customer)).status).toBe(401);
+    const newSession = await login(customerAgent, {
+      ...customer,
+      password: "new-secure-password"
+    });
+    expect(newSession.status).toBe(200);
   });
 });

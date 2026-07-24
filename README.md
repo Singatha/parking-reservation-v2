@@ -7,6 +7,7 @@ while preserving clear module boundaries.
 ## What is included
 
 - User registration and login
+- Editable user profiles and secure password changes
 - Password hashing with bcrypt
 - Opaque HTTP-only cookie sessions stored as hashes
 - CSRF protection for every authenticated state change
@@ -15,7 +16,10 @@ while preserving clear module boundaries.
 - User-owned vehicle management
 - Parking-space listing and complete administrator management
 - Transactional reservations with overlap protection
+- Fifteen-minute payment holds and an idempotent mock payment gateway
+- Immutable invoices with printable, save-to-PDF views
 - Reservation history and cancellation
+- Persistent light, dark, and system themes
 - MySQL migrations, health checks, structured logs, and graceful shutdown
 - Responsive React interface
 - Docker images that run as non-root users
@@ -135,8 +139,25 @@ GitHub Actions for pushes and pull requests.
 
 Playwright browser tests exercise the real React interface in Chromium. They cover
 customer registration, refresh-safe sessions, vehicle creation, reservation and
-cancellation, logout, administrator promotion, and the parking-space management
-interface. Test records use unique identifiers and are removed after the suite.
+mock payment, invoice viewing, cancellation, profile editing, dark-mode persistence,
+logout, administrator promotion, and the parking-space management interface. Test
+records use unique identifiers and are removed after the suite.
+
+## Mock billing
+
+Reservations begin in `pending_payment` and hold a space for 15 minutes. The UI can
+simulate an approved or declined payment:
+
+- Approval confirms the reservation and creates an immutable invoice snapshot.
+- Decline cancels the reservation and releases the space.
+- Reusing an idempotency key returns the original payment instead of charging twice.
+
+This gateway does not move real money and must not be represented as a real payment.
+The payment service boundary is intended to support a future Stripe adapter and
+verified webhook flow without changing reservations or invoices.
+
+Invoices default to a zero tax rate. Configure `INVOICE_TAX_RATE` only after obtaining
+appropriate accounting guidance for the deployment jurisdiction.
 
 ## Security notes
 

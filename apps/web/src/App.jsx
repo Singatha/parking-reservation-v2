@@ -13,7 +13,45 @@ const emptySpace = {
   hourlyPrice: ""
 };
 
-function Auth({ onLogin }) {
+function ThemeControl({ theme, onChange }) {
+  return (
+    <label className="theme-control">
+      <span>Theme</span>
+      <select aria-label="Theme" value={theme} onChange={(event) => onChange(event.target.value)}>
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+  );
+}
+
+function InvoiceDocument({ invoice }) {
+  return (
+    <article className="invoice-document">
+      <div className="invoice-header">
+        <div className="brand"><span className="brand-mark">P</span> Parkwise</div>
+        <div><p className="eyebrow">INVOICE</p><h2>{invoice.invoiceNumber}</h2><p>{new Date(invoice.issuedAt).toLocaleDateString()}</p></div>
+      </div>
+      <div className="invoice-parties">
+        <div><span>Bill to</span><strong>{invoice.customerName}</strong><p>{invoice.customerEmail}</p></div>
+        <div><span>Reservation</span><strong>{invoice.buildingName} · {invoice.spaceCode}</strong><p>{invoice.vehicleName} · {invoice.licensePlate}</p></div>
+      </div>
+      <div className="invoice-line">
+        <div><strong>Parking reservation</strong><p>{new Date(invoice.startsAt).toLocaleString()} → {new Date(invoice.endsAt).toLocaleString()}</p></div>
+        <strong>{invoice.currency} {Number(invoice.subtotal).toFixed(2)}</strong>
+      </div>
+      <div className="invoice-totals">
+        <p><span>Subtotal</span><strong>{invoice.currency} {Number(invoice.subtotal).toFixed(2)}</strong></p>
+        <p><span>Tax ({(Number(invoice.taxRate) * 100).toFixed(0)}%)</span><strong>{invoice.currency} {Number(invoice.taxAmount).toFixed(2)}</strong></p>
+        <p className="invoice-total"><span>Total paid</span><strong>{invoice.currency} {Number(invoice.total).toFixed(2)}</strong></p>
+      </div>
+      <p className="invoice-footer">Payment received through the Parkwise mock payment gateway.</p>
+    </article>
+  );
+}
+
+function Auth({ onLogin, theme, onThemeChange }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState(emptyRegistration);
   const [error, setError] = useState("");
@@ -52,6 +90,7 @@ function Auth({ onLogin }) {
       </section>
 
       <section className="auth-panel">
+        <ThemeControl theme={theme} onChange={onThemeChange} />
         <form className="auth-card" onSubmit={submit}>
           <p className="eyebrow">{mode === "login" ? "WELCOME BACK" : "GET STARTED"}</p>
           <h2>{mode === "login" ? "Sign in to Parkwise" : "Create your account"}</h2>
@@ -81,31 +120,36 @@ function Auth({ onLogin }) {
   );
 }
 
-function Dashboard({ user, onLogout }) {
+function Dashboard({ user, onLogout, theme, onThemeChange }) {
+  const [currentUser, setCurrentUser] = useState(user);
   const [tab, setTab] = useState("spaces");
   const [spaces, setSpaces] = useState([]);
   const [adminSpaces, setAdminSpaces] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [reservations, setReservations] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
     try {
-      const [spacesData, vehiclesData, reservationsData, adminSpacesData] = await Promise.all([
+      const [spacesData, vehiclesData, reservationsData, adminSpacesData, invoicesData] = await Promise.all([
         api("/spaces"),
         api("/vehicles"),
         api("/reservations"),
-        user.role === "admin" ? api("/spaces?includeInactive=true") : Promise.resolve([])
+        currentUser.role === "admin" ? api("/spaces?includeInactive=true") : Promise.resolve([]),
+        api("/invoices")
       ]);
       setSpaces(spacesData);
       setVehicles(vehiclesData);
       setReservations(reservationsData);
       setAdminSpaces(adminSpacesData);
+      setInvoices(invoicesData);
     } catch (requestError) {
       setError(requestError.message);
     }
-  }, [user.role]);
+  }, [currentUser.role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -126,7 +170,7 @@ function Dashboard({ user, onLogout }) {
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
       await api("/reservations", { method: "POST", body: JSON.stringify(values) });
-      setMessage("Your parking space is confirmed.");
+      setMessage("Space held for 15 minutes. Complete the mock payment to confirm it.");
       setTab("reservations");
       load();
     } catch (requestError) { setError(requestError.message); }
@@ -137,6 +181,53 @@ function Dashboard({ user, onLogout }) {
       await api(`/reservations/${id}/cancel`, { method: "POST" });
       setMessage("Reservation cancelled.");
       load();
+    } catch (requestError) { setError(requestError.message); }
+  }
+
+  async function pay(reservation, outcome) {
+    try {
+      const payment = await api("/payments/mock", {
+        method: "POST",
+        body: JSON.stringify({
+          reservationId: reservation.id,
+          outcome,
+          idempotencyKey: crypto.randomUUID()
+        })
+      });
+      if (payment.status === "failed") {
+        setError(payment.failureReason);
+      } else {
+        setMessage("Mock payment approved. Your invoice is ready.");
+        setTab("invoices");
+      }
+    } catch (requestError) { setError(requestError.message); }
+    finally { await load(); }
+  }
+
+  async function updateProfile(event) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      const result = await api("/profile", {
+        method: "PUT",
+        body: JSON.stringify(values)
+      });
+      setCurrentUser(result.user);
+      setMessage("Profile updated.");
+    } catch (requestError) { setError(requestError.message); }
+  }
+
+  async function changePassword(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await api("/profile/password", {
+        method: "POST",
+        body: JSON.stringify(values)
+      });
+      form.reset();
+      setMessage("Password changed. Other sessions were signed out.");
     } catch (requestError) { setError(requestError.message); }
   }
 
@@ -202,16 +293,36 @@ function Dashboard({ user, onLogout }) {
       <header>
         <div className="brand"><span className="brand-mark">P</span> Parkwise</div>
         <nav>
-          {["spaces", "vehicles", "reservations", ...(user.role === "admin" ? ["manage"] : [])].map((item) => (
+          {[
+            "spaces",
+            "vehicles",
+            "reservations",
+            "invoices",
+            "profile",
+            ...(currentUser.role === "admin" ? ["manage"] : [])
+          ].map((item) => (
             <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>
           ))}
         </nav>
-        <div className="profile"><span>{user.firstName}</span><button onClick={logout}>Sign out</button></div>
+        <div className="profile"><ThemeControl theme={theme} onChange={onThemeChange} /><span>{currentUser.firstName}</span><button onClick={logout}>Sign out</button></div>
       </header>
       <main className="dashboard">
         <div className="page-heading">
-          <div><p className="eyebrow">GOOD TO SEE YOU</p><h1>{tab === "spaces" ? "Find your space" : tab === "vehicles" ? "Your vehicles" : tab === "reservations" ? "Your reservations" : "Manage spaces"}</h1></div>
-          <p className="muted">{tab === "spaces" ? "Choose a parking bay and the time you need it." : tab === "manage" ? "Create and maintain the spaces customers can reserve." : "Everything connected to your account."}</p>
+          <div><p className="eyebrow">GOOD TO SEE YOU</p><h1>{
+            tab === "spaces" ? "Find your space"
+              : tab === "vehicles" ? "Your vehicles"
+                : tab === "reservations" ? "Your reservations"
+                  : tab === "invoices" ? "Your invoices"
+                    : tab === "profile" ? "Your profile"
+                      : "Manage spaces"
+          }</h1></div>
+          <p className="muted">{
+            tab === "spaces" ? "Choose a parking bay and the time you need it."
+              : tab === "manage" ? "Create and maintain the spaces customers can reserve."
+                : tab === "invoices" ? "View and save invoices for completed mock payments."
+                  : tab === "profile" ? "Keep your account details and password current."
+                    : "Everything connected to your account."
+          }</p>
         </div>
         {message && <p className="notice">{message}<button onClick={() => setMessage("")}>×</button></p>}
         {error && <p className="error">{error}<button onClick={() => setError("")}>×</button></p>}
@@ -261,14 +372,72 @@ function Dashboard({ user, onLogout }) {
               <article className="reservation-row" key={reservation.id}>
                 <div className="date-block"><strong>{new Date(reservation.startsAt).getDate()}</strong><span>{new Date(reservation.startsAt).toLocaleString("en", { month: "short" })}</span></div>
                 <div><h3>{reservation.buildingName} · {reservation.spaceCode}</h3><p>{new Date(reservation.startsAt).toLocaleString()} → {new Date(reservation.endsAt).toLocaleString()}</p><p>{reservation.vehicleName} · {reservation.licensePlate}</p></div>
-                <div className="reservation-meta"><span className={`status ${reservation.status}`}>{reservation.status}</span><strong>R{Number(reservation.totalPrice).toFixed(2)}</strong>{reservation.status === "confirmed" && <button className="danger-link" onClick={() => cancel(reservation.id)}>Cancel</button>}</div>
+                <div className="reservation-meta">
+                  <span className={`status ${reservation.status}`}>{reservation.status.replace("_", " ")}</span>
+                  <strong>R{Number(reservation.totalPrice).toFixed(2)}</strong>
+                  {reservation.status === "pending_payment" && (
+                    <div className="payment-actions">
+                      <button className="pay-button" onClick={() => pay(reservation, "approved")}>Pay now</button>
+                      <button className="danger-link" onClick={() => pay(reservation, "declined")}>Simulate decline</button>
+                    </div>
+                  )}
+                  {["pending_payment", "confirmed"].includes(reservation.status) && <button className="danger-link" onClick={() => cancel(reservation.id)}>Cancel</button>}
+                </div>
               </article>
             ))}
             {!reservations.length && <div className="empty">No reservations yet. Your first booking will appear here.</div>}
           </section>
         )}
 
-        {tab === "manage" && user.role === "admin" && (
+        {tab === "invoices" && (
+          <div className="invoice-layout">
+            <section className="list-card invoice-list">
+              {invoices.map((invoice) => (
+                <button key={invoice.id} className={selectedInvoice?.id === invoice.id ? "selected" : ""} onClick={() => setSelectedInvoice(invoice)}>
+                  <span><strong>{invoice.invoiceNumber}</strong><small>{new Date(invoice.issuedAt).toLocaleDateString()}</small></span>
+                  <strong>{invoice.currency} {Number(invoice.total).toFixed(2)}</strong>
+                </button>
+              ))}
+              {!invoices.length && <div className="empty">Invoices appear here after a successful mock payment.</div>}
+            </section>
+            {selectedInvoice ? (
+              <section>
+                <button className="print-button" onClick={() => window.print()}>Print / save PDF</button>
+                <InvoiceDocument invoice={selectedInvoice} />
+              </section>
+            ) : invoices.length ? (
+              <div className="empty">Select an invoice to view it.</div>
+            ) : null}
+          </div>
+        )}
+
+        {tab === "profile" && (
+          <div className="profile-layout">
+            <section className="booking-card profile-card">
+              <p className="eyebrow">ACCOUNT DETAILS</p><h2>Personal information</h2>
+              <form onSubmit={updateProfile}>
+                <label>Email<input value={currentUser.email} disabled /></label>
+                <label>Username<input name="username" defaultValue={currentUser.username} required minLength="3" /></label>
+                <div className="field-row">
+                  <label>First name<input name="firstName" defaultValue={currentUser.firstName} required /></label>
+                  <label>Last name<input name="lastName" defaultValue={currentUser.lastName} required /></label>
+                </div>
+                <label>Role<input value={currentUser.role} disabled /></label>
+                <button className="primary">Save profile</button>
+              </form>
+            </section>
+            <section className="booking-card profile-card">
+              <p className="eyebrow">SECURITY</p><h2>Change password</h2>
+              <form onSubmit={changePassword}>
+                <label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+                <label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength="10" required /></label>
+                <button className="primary">Change password</button>
+              </form>
+            </section>
+          </div>
+        )}
+
+        {tab === "manage" && currentUser.role === "admin" && (
           <div className="admin-layout">
             <section className="admin-table">
               <div className="section-title"><h2>All parking spaces</h2><span>{adminSpaces.length} total</span></div>
@@ -312,6 +481,19 @@ function Dashboard({ user, onLogout }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [theme, setTheme] = useState(() => localStorage.getItem("parkwise_theme") ?? "system");
+
+  useEffect(() => {
+    localStorage.setItem("parkwise_theme", theme);
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      document.documentElement.dataset.theme =
+        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+    };
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    return () => media.removeEventListener("change", applyTheme);
+  }, [theme]);
 
   useEffect(() => {
     api("/auth/session")
@@ -324,5 +506,7 @@ export default function App() {
     return <main className="session-loading"><div className="brand"><span className="brand-mark">P</span> Parkwise</div><p>Restoring your session…</p></main>;
   }
 
-  return user ? <Dashboard user={user} onLogout={() => setUser(null)} /> : <Auth onLogin={setUser} />;
+  return user
+    ? <Dashboard user={user} onLogout={() => setUser(null)} theme={theme} onThemeChange={setTheme} />
+    : <Auth onLogin={setUser} theme={theme} onThemeChange={setTheme} />;
 }

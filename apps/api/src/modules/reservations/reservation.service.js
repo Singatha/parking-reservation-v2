@@ -19,7 +19,11 @@ export async function createReservation(userId, input) {
 
     const [conflicts] = await connection.execute(
       `SELECT id FROM reservations
-       WHERE parking_space_id = ? AND status = 'confirmed'
+       WHERE parking_space_id = ?
+         AND (
+           status = 'confirmed'
+           OR (status = 'pending_payment' AND payment_expires_at > NOW())
+         )
          AND starts_at < ? AND ends_at > ?
        LIMIT 1 FOR UPDATE`,
       [input.parkingSpaceId, input.endsAt, input.startsAt]
@@ -30,14 +34,29 @@ export async function createReservation(userId, input) {
 
     const hours = Math.ceil((input.endsAt.getTime() - input.startsAt.getTime()) / 3_600_000);
     const totalPrice = hours * spaces[0].hourly_price;
+    const paymentExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
     const [result] = await connection.execute(
       `INSERT INTO reservations
-       (parking_space_id, user_id, vehicle_id, starts_at, ends_at, total_price)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [input.parkingSpaceId, userId, input.vehicleId, input.startsAt, input.endsAt, totalPrice]
+       (parking_space_id, user_id, vehicle_id, starts_at, ends_at, payment_expires_at,
+        status, total_price)
+       VALUES (?, ?, ?, ?, ?, ?, 'pending_payment', ?)`,
+      [
+        input.parkingSpaceId,
+        userId,
+        input.vehicleId,
+        input.startsAt,
+        input.endsAt,
+        paymentExpiresAt,
+        totalPrice
+      ]
     );
     await connection.commit();
-    return { id: result.insertId, status: "confirmed", totalPrice };
+    return {
+      id: result.insertId,
+      status: "pending_payment",
+      totalPrice,
+      paymentExpiresAt
+    };
   } catch (error) {
     await connection.rollback();
     throw error;

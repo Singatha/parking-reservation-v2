@@ -9,7 +9,8 @@ export const reservationRouter = Router();
 
 reservationRouter.get("/", async (req, res) => {
   const [rows] = await pool.execute(
-    `SELECT r.id, r.starts_at AS startsAt, r.ends_at AS endsAt, r.status,
+    `SELECT r.id, r.starts_at AS startsAt, r.ends_at AS endsAt,
+            r.payment_expires_at AS paymentExpiresAt, r.status,
             r.total_price AS totalPrice, s.code AS spaceCode,
             s.building_name AS buildingName, v.name AS vehicleName,
             v.license_plate AS licensePlate
@@ -30,7 +31,7 @@ reservationRouter.post("/", validate(createReservationSchema), async (req, res) 
 reservationRouter.post("/:id/cancel", validate(reservationIdSchema), async (req, res) => {
   const [result] = await pool.execute(
     `UPDATE reservations SET status = 'cancelled'
-     WHERE id = ? AND user_id = ? AND status = 'confirmed'`,
+     WHERE id = ? AND user_id = ? AND status IN ('pending_payment', 'confirmed')`,
     [req.validated.params.id, req.user.id]
   );
   if (!result.affectedRows) throw notFound("Active reservation not found");

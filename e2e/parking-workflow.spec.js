@@ -31,6 +31,24 @@ function databaseConfig() {
   };
 }
 
+async function cleanupE2EData(database) {
+  const testUsers = "u.email LIKE 'e2e-%@example.com'";
+  await database.query(
+    `DELETE i FROM invoices i JOIN users u ON u.id = i.user_id WHERE ${testUsers}`
+  );
+  await database.query(
+    `DELETE p FROM payments p JOIN users u ON u.id = p.user_id WHERE ${testUsers}`
+  );
+  await database.query(
+    `DELETE r FROM reservations r JOIN users u ON u.id = r.user_id WHERE ${testUsers}`
+  );
+  await database.query("DELETE FROM users WHERE email LIKE 'e2e-%@example.com'");
+  await database.query(
+    `DELETE FROM parking_spaces
+     WHERE code LIKE 'BOOK-%' OR code LIKE 'ADMIN-%' OR code LIKE 'EDIT-%'`
+  );
+}
+
 async function register(page, user) {
   await page.getByRole("button", { name: "New here? Create an account" }).click();
   await page.getByLabel("First name").fill(user.firstName);
@@ -53,6 +71,7 @@ test.describe.serial("browser parking workflow", () => {
   test.beforeAll(async () => {
     const database = await mysql.createConnection(databaseConfig());
     try {
+      await cleanupE2EData(database);
       await database.execute(
         `INSERT INTO parking_spaces (code, type, building_name, address, hourly_price)
          VALUES (?, 'standard', 'E2E Parkade', '1 Browser Test Road', 20)`,
@@ -66,20 +85,7 @@ test.describe.serial("browser parking workflow", () => {
   test.afterAll(async () => {
     const database = await mysql.createConnection(databaseConfig());
     try {
-      await database.execute(
-        `DELETE r FROM reservations r
-         JOIN users u ON u.id = r.user_id
-         WHERE u.email IN (?, ?)`,
-        [customer.email, admin.email]
-      );
-      await database.execute(
-        "DELETE FROM users WHERE email IN (?, ?)",
-        [customer.email, admin.email]
-      );
-      await database.execute(
-        "DELETE FROM parking_spaces WHERE code IN (?, ?, ?)",
-        [bookingSpaceCode, managedSpaceCode, editedSpaceCode]
-      );
+      await cleanupE2EData(database);
     } finally {
       await database.end();
     }
@@ -91,6 +97,16 @@ test.describe.serial("browser parking workflow", () => {
 
     await page.reload();
     await expect(page.getByRole("heading", { name: "Find your space" })).toBeVisible();
+
+    await page.getByLabel("Theme").selectOption("dark");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    await page.getByRole("button", { name: "profile" }).click();
+    await page.getByLabel("First name").fill("Browser");
+    await page.getByRole("button", { name: "Save profile" }).click();
+    await expect(page.getByText("Profile updated.")).toBeVisible();
 
     await page.getByRole("button", { name: "vehicles" }).click();
     await page.getByLabel("Vehicle name").fill("Browser test car");
@@ -108,6 +124,13 @@ test.describe.serial("browser parking workflow", () => {
 
     await expect(page.getByRole("heading", { name: "Your reservations" })).toBeVisible();
     await expect(page.getByText(bookingSpaceCode)).toBeVisible();
+    await page.getByRole("button", { name: "Pay now" }).click();
+    await expect(page.getByRole("heading", { name: "Your invoices" })).toBeVisible();
+    await page.locator(".invoice-list button").first().click();
+    await expect(page.getByRole("button", { name: "Print / save PDF" })).toBeVisible();
+    await expect(page.getByText("Total paid")).toBeVisible();
+
+    await page.getByRole("button", { name: "reservations" }).click();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByText("Reservation cancelled.")).toBeVisible();
 

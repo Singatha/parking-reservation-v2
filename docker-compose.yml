@@ -33,6 +33,7 @@ services:
       DATABASE_PASSWORD: local-parking-password
       SESSION_TTL_DAYS: 7
       COOKIE_SECURE: "false"
+      INVOICE_TAX_RATE: 0
     ports:
       - "3000:3000"
     depends_on:
